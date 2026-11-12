@@ -1,12 +1,15 @@
-import conf as conf
-import simulation as sim
-import k8.algorithm as alg
+"""
+Runs the simulation once per experiment. Each experiment is (metrics_name_postfix, algorithm name).
+"""
+import conf
+import simulation
 
-runs_postfix = ["ant_colony_demo"]
-algorithms = [alg.ant_colony_solve]
+experiments = [
+    ("ant_colony_demo", "ant_colony_solve"),
+]
 
-
-for i, run in enumerate(runs_postfix):
-    conf.algorithm = algorithms[i]
-    conf.metrics_name_postfix = run
-    sim.run_simulation()
+if __name__ == "__main__":
+    for postfix, algorithm in experiments:
+        conf.algorithm = algorithm
+        conf.metrics_name_postfix = postfix
+        simulation.run_simulation()

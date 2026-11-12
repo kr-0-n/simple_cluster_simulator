@@ -1,23 +1,25 @@
 """
-This file is designed to simulate time
+Simulated time. One time step corresponds to STEP_DURATION of simulated time.
 """
 
 from datetime import datetime, timedelta
 
+START_TIME: datetime = datetime(2020, 1, 1, 0, 0, 0)
+STEP_DURATION: timedelta = timedelta(minutes=1)
 
-saved_state=None
-simulated_time: datetime = datetime(2020, 1, 1, 00, 00, 00)
+simulated_time: datetime = START_TIME
 time_step: int = 0
 
 
 def increment_time():
     """
-    incrementing will automattimestepically increment by 15 mintutes
+    Advance the simulation by one time step.
     """
-    global simulated_time 
+    global simulated_time
     global time_step
-    simulated_time += timedelta(minutes=1)
+    simulated_time += STEP_DURATION
     time_step += 1
+
 
 def current_time() -> datetime:
     """
@@ -25,35 +27,40 @@ def current_time() -> datetime:
     """
     return simulated_time
 
+
 def current_time_step() -> int:
     """
     returns the current timestep as an integer
     """
     return time_step
 
+
 def timestep_to_time(timestep: int) -> datetime:
     """
-    converts an integer timestep into a python time object
+    converts an integer timestep into a datetime
     """
-    return datetime(2020, 1, 1, 00, 00, 00) + timedelta(minutes=timestep*1)
+    return START_TIME + timestep * STEP_DURATION
+
 
 def time_to_timestep(time: datetime) -> int:
     """
-    converts time object into an integer timestep
+    converts a datetime into an integer timestep
     """
-    return int((time - Configurations.start_time).total_seconds() / 60 /15)
+    return int((time - START_TIME) / STEP_DURATION)
 
-def sql_time(time_obj: datetime):
+
+def sql_time(time_obj: datetime) -> str:
     """
     converts a time object into valid sql time
     """
     return time_obj.strftime("%Y-%m-%d %H:%M:%S")
 
+
 def reset_time():
     """
-    resets the time to the starting time given in the simulation and the timestep to 0
+    resets the time to START_TIME and the timestep to 0
     """
     global simulated_time
     global time_step
-    simulated_time = datetime(2020, 1, 1, 00, 00, 00)
+    simulated_time = START_TIME
     time_step = 0

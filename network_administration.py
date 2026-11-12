@@ -1,42 +1,53 @@
+"""
+Builds the network graph from a topology and repairs it after the chaos monkey broke parts of it.
+"""
 import networkx as nx
-import conf
-from simmath.LinearFunction import LinearFunction
-from metrics import create_metric
+
 import Time as time
+from utils import link_service
 
-node_failures = {} # syntax: {node: [time_of_failure]}
+node_failures = {} # syntax: {node: [time_steps_of_failure]}  (read by the evaluator)
+shared_graph_dict = None  # the topology the network is repaired to
 
-def setup_network(graph_dict: dict) -> nx.Graph:
-    # Create an undirected graph
+
+def reset():
+    """
+    Forget the recorded node failures and the topology (call before every simulation run).
+    """
+    global shared_graph_dict
+    node_failures.clear()
+    shared_graph_dict = None
+
+
+def setup_network(graph_dict: dict) -> nx.DiGraph:
+    """
+    Create the directed network graph for a topology (see scenarios.py).
+    """
     global shared_graph_dict
     shared_graph_dict = graph_dict
     G = nx.DiGraph()
-
-    # Add nodes
-    G.add_nodes_from(shared_graph_dict['nodes'])
-
-    # Add edges
-    G.add_edges_from(shared_graph_dict['edges'], type="connection")
+    G.add_nodes_from(graph_dict['nodes'])
+    G.add_edges_from(graph_dict['edges'], type="connection")
     for edge in G.edges:
-        G.edges[edge]["service"] = LinearFunction(G.edges[edge]["throughput"], 0, -G.edges[edge]["latency"])
-        print(G.edges[edge])
-
+        G.edges[edge]["service"] = link_service(G.edges[edge]["throughput"], G.edges[edge]["latency"])
     return G
 
-def repair_network(graph: nx.Graph):
-    # First check nodes
-    for node in shared_graph_dict['nodes']:
-        if node[0] not in graph.nodes:
-            print(f"{__name__}: Node {node[0]} offline")
-            if not node[0] in node_failures: node_failures[node[0]] = []
-            node_failures[node[0]].append(time.current_time_step())
-            graph.add_node(node[0], **node[1])
-            print(f"{__name__}: Node {node[0]} back online")
-    # Then check edges
-    for edge in shared_graph_dict['edges']:
-        if (edge[0], edge[1]) not in graph.edges:
-            print(f"{__name__}: Link ({edge[0]}, {edge[1]}) offline")
-            graph.add_edge(edge[0], edge[1], type="connection", **edge[2], service=LinearFunction(edge[2]["throughput"], 0, -edge[2]["latency"]))
-            print(f"{__name__}: Link ({edge[0]}, {edge[1]}) back online")
 
-    return
+def repair_network(graph: nx.DiGraph):
+    """
+    Bring back every node and link of the topology that is missing in the graph.
+    """
+    # First check nodes
+    for node_id, node_attributes in shared_graph_dict['nodes']:
+        if node_id not in graph.nodes:
+            print(f"{__name__}: Node {node_id} offline")
+            node_failures.setdefault(node_id, []).append(time.current_time_step())
+            graph.add_node(node_id, **node_attributes)
+            print(f"{__name__}: Node {node_id} back online")
+    # Then check edges
+    for start, end, link_attributes in shared_graph_dict['edges']:
+        if (start, end) not in graph.edges:
+            print(f"{__name__}: Link ({start}, {end}) offline")
+            graph.add_edge(start, end, type="connection", **link_attributes,
+                           service=link_service(link_attributes["throughput"], link_attributes["latency"]))
+            print(f"{__name__}: Link ({start}, {end}) back online")

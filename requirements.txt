@@ -1,4 +1,5 @@
 networkx
 matplotlib
 numpy
-mysql-connector-python
+pydot                    # visualizer (dot export)
+mysql-connector-python   # only needed with conf.enable_metrics = True

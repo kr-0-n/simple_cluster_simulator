@@ -1,60 +1,79 @@
+"""
+Records time series metrics into a MySQL database (one database per run, one table per metric).
+Recording is a no-op unless initialize() was called with enabled=True.
+"""
+import re
+
 import Time as time
-import mysql.connector
 
-database_connection=None
-database_cursor=None
-name=None
+database_connection = None
+database_cursor = None
+name = None
 
-record_metrics=False
+record_metrics = False
+
+_IDENTIFIER = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def _check_identifier(identifier: str) -> str:
+    # Table/database names cannot be passed as query parameters, so validate them instead.
+    if not _IDENTIFIER.match(identifier):
+        raise ValueError(f"invalid metric/database name: {identifier!r}")
+    return identifier
+
+
 def update_metric(metric: str, value: float):
     """
-    Update metrics with new values.
+    Append a value for the current simulated time to the given metric.
     """
-    global record_metrics
     if not record_metrics: return
-    global database_connection
-    global database_cursor
-    database_cursor.execute(f"INSERT INTO {metric} (time, {metric}) VALUES (\"{time.current_time().strftime('%Y-%m-%d %H:%M:%S')}\", {value});")
-    # print(f"updated {metric} with {value}")
+    table = _check_identifier(metric)
+    database_cursor.execute(
+        f"INSERT INTO `{table}` (time, `{table}`) VALUES (%s, %s);",
+        (time.sql_time(time.current_time()), value),
+    )
     database_connection.commit()
+
 
 def create_metric(metric: str):
     """
-    Create a new metric with the given id.
+    Create the table for a new metric.
     """
-    global record_metrics
     if not record_metrics: return
-    global database_connection
-    global database_cursor
-    database_cursor.execute(f"CREATE TABLE {metric} (time DATETIME NOT NULL, {metric} FLOAT);")
+    table = _check_identifier(metric)
+    database_cursor.execute(f"CREATE TABLE `{table}` (time DATETIME NOT NULL, `{table}` FLOAT);")
     database_connection.commit()
-     
 
-def initialize(algorithm_name: str, run: int):
-    global record_metrics
-    # This is slightly hacky but avoids partial imports
-    import conf
-    record_metrics = conf.enable_metrics
-    if not record_metrics: return    
-    global name
-    name = f"k8_simulation_{run}_{algorithm_name}"    
+
+def initialize(algorithm_name: str, run: int, enabled: bool, host: str, user: str, password: str):
+    """
+    Create the database for this run and connect to it.
+    """
+    global record_metrics, name, database_connection, database_cursor
+    record_metrics = enabled
+    if not record_metrics: return
+
+    import mysql.connector  # only needed when metrics are recorded
+
+    name = _check_identifier(f"k8_simulation_{run}_{algorithm_name}")
     print(name)
-    mydb = mysql.connector.connect(
-        host=conf.database_host,
-        user=conf.database_user,
-        password=conf.database_password
-    )
-    mycursor = mydb.cursor(buffered=True)
-    mycursor.execute(f"CREATE DATABASE {name}")
+    admin_connection = mysql.connector.connect(host=host, user=user, password=password)
+    try:
+        admin_connection.cursor().execute(f"CREATE DATABASE `{name}`")
+    finally:
+        admin_connection.close()
 
-
-    global database_connection
-    global database_cursor
-
-    database_connection = mysql.connector.connect(
-        host=conf.database_host,
-        user=conf.database_user,
-        password=conf.database_password,
-        database=name
-    )
+    database_connection = mysql.connector.connect(host=host, user=user, password=password, database=name)
     database_cursor = database_connection.cursor()
+
+
+def close():
+    """
+    Close the database connection (if any) and stop recording.
+    """
+    global record_metrics, database_connection, database_cursor
+    record_metrics = False
+    if database_connection is not None:
+        database_connection.close()
+    database_connection = None
+    database_cursor = None
