@@ -1,0 +1,7 @@
+# Two pods that talk to each other.
+name: mini
+defaults:
+  pod: {stability: 0.99}
+pods:
+  - {id: 4, cpu: 60, mem: 30, network: [{to: 5, latency: 2, throughput: 100}]}
+  - {id: 5, cpu: 60, mem: 30, network: [{to: 4, latency: 2, throughput: 100}]}

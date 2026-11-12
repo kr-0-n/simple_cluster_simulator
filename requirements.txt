@@ -1,5 +1,7 @@
 networkx
-matplotlib
-numpy
-pydot                    # visualizer (dot export)
-mysql-connector-python   # only needed with conf.enable_metrics = True
+pyyaml
+pydot                    # dot export (visualizer, ant colony debug graph)
+matplotlib               # simmath plots
+mysql-connector-python   # only for the mysql metrics backend
+pytest
+ruff

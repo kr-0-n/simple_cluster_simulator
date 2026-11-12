@@ -1,0 +1,8 @@
+# The setup of the former conf.py: ant colony on the medium edge network.
+# (conf.py combined the small topology with the medium deployment, whose camera/sensor
+#  label selectors no node of the small topology can satisfy.)
+name: default
+scenarios: [medium + medium]
+algorithms: [ant_colony_solve]
+seeds: [19]
+steps: 1440

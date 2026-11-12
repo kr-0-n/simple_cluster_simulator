@@ -1,6 +1,9 @@
 __pycache__/
+.pytest_cache/
+.ruff_cache/
 *.dot
 *.png
+results/
 deploy/sql_data/
 deploy/grafana_data/
 network_aware_k8s_scheduler/

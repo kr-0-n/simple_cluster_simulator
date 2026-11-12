@@ -1,0 +1,12 @@
+# Seven pods with a ring of connections; pod 11 needs a node with an SSD.
+name: small
+defaults:
+  pod: {stability: 0.99}
+pods:
+  - {id: 5, cpu: 30, mem: 30, network: [{to: 6, latency: 3, throughput: 5}]}
+  - {id: 6, cpu: 30, mem: 30, network: [{to: 7, latency: 3, throughput: 2}]}
+  - {id: 7, cpu: 30, mem: 30, network: [{to: 5, latency: 3, throughput: 5}]}
+  - {id: 8, cpu: 30, mem: 30, network: [{to: 9, latency: 3, throughput: 1}]}
+  - {id: 9, cpu: 30, mem: 30, network: [{to: 5, latency: 3, throughput: 3}]}
+  - {id: 10, cpu: 30, mem: 30, network: [{to: 5, latency: 3, throughput: 3}]}
+  - {id: 11, cpu: 30, mem: 30, labelSelector: [SSD], network: [{to: 9, latency: 5, throughput: 3}]}

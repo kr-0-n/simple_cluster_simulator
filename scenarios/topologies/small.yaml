@@ -1,0 +1,17 @@
+# Four nodes; node 1 has an SSD. Links are asymmetric (throughput/latency differ per direction).
+name: small
+defaults:
+  link: {stability: 0.99}
+nodes:
+  - {id: 1, cpu: 100, mem: 100, labels: [SSD], stability: 0.7}
+  - {id: 2, cpu: 100, mem: 100, stability: 0.7}
+  - {id: 3, cpu: 100, mem: 100, stability: 0.99}
+  - {id: 4, cpu: 100, mem: 100, stability: 0.99}
+links:
+  - {from: 1, to: 2, throughput: 5, latency: 2}
+  - {from: 1, to: 3, throughput: 1, latency: 3}
+  - {from: 2, to: 4, throughput: 3, latency: 4}
+  - {from: 3, to: 4, throughput: 10, latency: 10, bidirectional: true}
+  - {from: 4, to: 2, throughput: 10, latency: 10}
+  - {from: 3, to: 1, throughput: 10, latency: 10}
+  - {from: 2, to: 1, throughput: 10, latency: 10}

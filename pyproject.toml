@@ -1,0 +1,22 @@
+[project]
+name = "simple-network-simulator"
+version = "0.2.0"
+description = "Simulator for comparing network aware Kubernetes scheduling algorithms"
+requires-python = ">=3.10"
+dependencies = ["networkx", "pyyaml", "pydot", "matplotlib"]
+
+[project.optional-dependencies]
+mysql = ["mysql-connector-python"]
+dev = ["pytest", "ruff"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 130
+extend-exclude = ["network_aware_k8s_scheduler"]
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = ["E701", "E731", "B905"]

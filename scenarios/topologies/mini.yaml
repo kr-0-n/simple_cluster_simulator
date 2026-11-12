@@ -1,0 +1,12 @@
+# Three nodes; 1 and 2 are only connected through 3 (slow links).
+name: mini
+defaults:
+  node: {stability: 0.99}
+  link: {stability: 0.99}
+nodes:
+  - {id: 1, cpu: 100, mem: 100, labels: ['1']}
+  - {id: 2, cpu: 100, mem: 100, labels: ['2']}
+  - {id: 3, cpu: 100, mem: 100, labels: ['3']}
+links:
+  - {from: 1, to: 3, throughput: 1, latency: 220, bidirectional: true}
+  - {from: 2, to: 3, throughput: 1, latency: 220, bidirectional: true}

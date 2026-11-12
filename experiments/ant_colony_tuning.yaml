@@ -1,0 +1,13 @@
+# Example of comparing parameter variants of one algorithm (label = name in the results).
+name: ant_colony_tuning
+scenarios: [medium + medium]
+algorithms:
+  - {name: ant_colony_solve, label: aco_default}
+  - {name: ant_colony_solve, label: aco_4_ants, params: {ants: 4}}
+  - {name: ant_colony_solve, label: aco_3_rounds, params: {rounds: 3, moves_per_ant: 4}}
+seeds: [1, 2, 3]
+steps: 500
+penalties:
+  latency: 100
+  move_pod: 400
+metrics: {backend: sqlite, path: results/ant_colony_tuning.sqlite}

@@ -1,0 +1,48 @@
+# Edge network: 4 fully meshed base stations (1-4), camera clients (5-14) and satellite camera/sensor clients (15-20).
+name: medium
+defaults:
+  link: {stability: 0.99}
+nodes:
+  - {id: 1, cpu: 100, mem: 64, stability: 0.99}
+  - {id: 2, cpu: 100, mem: 64, stability: 0.9}
+  - {id: 3, cpu: 100, mem: 64, stability: 0.7}
+  - {id: 4, cpu: 100, mem: 64, stability: 0.5}
+  - {id: 5, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 6, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 7, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 8, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 9, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 10, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 11, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 12, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 13, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 14, cpu: 50, mem: 32, labels: [camera], stability: 0.99}
+  - {id: 15, cpu: 20, mem: 16, labels: [camera, sensor], stability: 0.99}
+  - {id: 16, cpu: 20, mem: 16, labels: [camera, sensor], stability: 0.99}
+  - {id: 17, cpu: 20, mem: 16, labels: [camera, sensor], stability: 0.99}
+  - {id: 18, cpu: 20, mem: 16, labels: [camera, sensor], stability: 0.99}
+  - {id: 19, cpu: 20, mem: 16, labels: [camera, sensor], stability: 0.99}
+  - {id: 20, cpu: 20, mem: 16, labels: [camera, sensor], stability: 0.99}
+links:
+  - {from: 1, to: 2, throughput: 500, latency: 7, bidirectional: true}
+  - {from: 1, to: 3, throughput: 500, latency: 7, bidirectional: true}
+  - {from: 1, to: 4, throughput: 500, latency: 10, bidirectional: true}
+  - {from: 2, to: 3, throughput: 500, latency: 7, bidirectional: true}
+  - {from: 2, to: 4, throughput: 500, latency: 7, bidirectional: true}
+  - {from: 3, to: 4, throughput: 500, latency: 7, bidirectional: true}
+  - {from: 5, to: 1, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 6, to: 1, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 7, to: 1, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 8, to: 2, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 9, to: 2, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 10, to: 2, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 11, to: 3, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 12, to: 3, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 13, to: 4, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 14, to: 4, throughput: 100, latency: 15, bidirectional: true}
+  - {from: 15, to: 1, throughput: 10, latency: 100, bidirectional: true}
+  - {from: 16, to: 1, throughput: 10, latency: 100, bidirectional: true}
+  - {from: 17, to: 2, throughput: 10, latency: 100, bidirectional: true}
+  - {from: 18, to: 2, throughput: 10, latency: 100, bidirectional: true}
+  - {from: 19, to: 3, throughput: 10, latency: 100, bidirectional: true}
+  - {from: 20, to: 4, throughput: 10, latency: 100, bidirectional: true}

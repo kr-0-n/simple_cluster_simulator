@@ -1,0 +1,18 @@
+# Compare the algorithms on both scenarios, 5 seeds each.
+# Run with: python -m simulator experiment experiments/compare_algorithms.yaml
+name: compare_algorithms
+scenarios:
+  - small + small
+  - medium + medium
+algorithms:
+  - random_solve
+  - kubernetes_default
+  - simulated_annealing_solve
+  - ant_colony_solve
+  - evolutionary_solve
+seeds: [1, 2, 3, 4, 5]
+steps: 1440
+repair_interval: 5
+metrics:
+  backend: sqlite
+  path: results/compare_algorithms.sqlite
