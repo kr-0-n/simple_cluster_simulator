@@ -7,7 +7,7 @@ algorithms:
   - {name: ant_colony_solve, label: aco_3_rounds, params: {rounds: 3, moves_per_ant: 4}}
 seeds: [1, 2, 3]
 steps: 500
-penalties:
-  latency: 100
-  move_pod: 400
+penalties:            # overrides of the weights in simulator/config.py (Penalties)
+  latency: 20
+  move_pod: 5
 metrics: {backend: sqlite, path: results/ant_colony_tuning.sqlite}

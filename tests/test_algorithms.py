@@ -28,8 +28,9 @@ def test_algorithms_place_all_new_pods_on_existing_nodes(name):
     placement = ALGORITHMS[name](p, **FAST_PARAMS.get(name, {}))
     assert set(placement) == set(p.pod_ids)
     assert all(node is None or node in p.node_ids for node in placement.values())
-    # the search algorithms may leave pods unscheduled when that is cheaper (unconnected_pod penalty)
-    if name in ("random_solve", "perfect_solve"):
+    # like the reference scheduler, the algorithms never unassign pods
+    # (kubernetes_default leaves a pod pending if no node is feasible)
+    if name != "kubernetes_default":
         assert all(node is not None for node in placement.values())
 
 

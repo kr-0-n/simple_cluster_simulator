@@ -31,7 +31,7 @@ def to_dot_graph(network: nx.DiGraph, pods: dict[PodId, Pod], placement: Placeme
     Links are drawn thicker the more throughput they have and red the more they are
     overloaded (if an evaluator is given).
     """
-    load = evaluator.network_penalty(placement)[1] if evaluator is not None else {}
+    load = evaluator.link_loads(placement) if evaluator is not None else {}
     graph = nx.DiGraph(label=title)
 
     sizes = {n: data["spec"].cpu + data["spec"].mem for n, data in network.nodes(data=True)}

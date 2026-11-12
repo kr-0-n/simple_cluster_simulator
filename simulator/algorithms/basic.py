@@ -3,6 +3,7 @@ Simple baselines: random placement, brute force and an imitation of the default 
 """
 import itertools
 import logging
+import math
 from collections import defaultdict
 
 from simulator.algorithms.common import SchedulingProblem
@@ -19,14 +20,15 @@ def random_solve(problem: SchedulingProblem) -> Placement:
 def perfect_solve(problem: SchedulingProblem, max_combinations: int = 10_000_000) -> Placement:
     """
     Brute force: try every assignment of all pods to nodes (#nodes ^ #pods combinations).
-    Stops early when a placement with evaluation 0 is found.
+    Stops early when a placement with evaluation 0 is found. Like the other algorithms (and
+    the reference scheduler) it only considers placements that assign every pod: the
+    evaluator does not penalise unassigned pods without network requirements.
     """
     combinations = len(problem.node_ids) ** len(problem.pod_ids)
     if combinations > max_combinations:
         raise ValueError(f"perfect_solve would have to check {combinations} combinations (max_combinations={max_combinations})")
     log.debug("checking %d ^ %d assignments", len(problem.node_ids), len(problem.pod_ids))
-    best = dict(problem.current)
-    best_value = problem.score(best)
+    best, best_value = dict(problem.current), math.inf
     for nodes in itertools.product(problem.node_ids, repeat=len(problem.pod_ids)):
         placement = dict(zip(problem.pod_ids, nodes))
         value = problem.score(placement)

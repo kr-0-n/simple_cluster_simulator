@@ -1,87 +1,139 @@
+"""
+Evaluator tests. The first tests are ports of the reference scheduler's
+scheduler/evaluator/evaluator_test.go with the same expected values.
+"""
 import pytest
 
+from simulator.config import Penalties
+from simulator.evaluator import Violations
 from tests.helpers import evaluator, link, node, pod
 
-TWO_NODES = [node(1), node(2)]
+
+def violations(nodes, links, pods, placement, **kwargs) -> Violations:
+    return evaluator(nodes, links, pods, previous=placement, **kwargs).evaluate(placement).violations
 
 
-def test_perfect_placement_scores_zero():
-    e = evaluator(TWO_NODES, [], [pod(10), pod(11)])
-    assert e.evaluate({10: 1, 11: 2}).total == 0
+# --- ports of evaluator_test.go ------------------------------------------------------------
+
+def test_resource_violations():
+    nodes = [node(1, cpu=1000, mem=1024), node(2, cpu=1000, mem=1024)]
+    pods = [pod(10, cpu=1500, mem=1536), pod(11, cpu=3000, mem=512)]  # node 1: 50 % over, node 2: 200 % over in CPU
+    v = violations(nodes, [], pods, {10: 1, 11: 2})
+    assert v.cpu == pytest.approx(0.5 + 2)
+    assert v.memory == pytest.approx(0.5)
 
 
-def test_unscheduled_pod():
-    e = evaluator(TWO_NODES, [], [pod(10)])
-    assert e.evaluate({10: None}).network == 500
+def test_latency_violation():
+    # 30 ms where 10 ms are allowed: 2x over
+    v = violations([node(1), node(2)], [link(1, 2, throughput=100, latency=30)],
+                   [pod(10, network=[(11, 10, 0)]), pod(11)], {10: 1, 11: 2})
+    assert v.latency == pytest.approx(2)
 
 
-def test_resources_overload_cpu_and_mem():
-    e = evaluator([node(1, cpu=10, mem=10)], [], [pod(10, cpu=8, mem=1), pod(11, cpu=5, mem=12)])
-    assert e.evaluate({10: 1, 11: 1}).resources == (13 - 10) + (13 - 10)
+def test_throughput_shared_link():
+    # two flows of 8 share a link with capacity 10: overloaded by 6, i.e. 60 %
+    v = violations([node(1), node(2)], [link(1, 2, throughput=10, latency=0)],
+                   [pod(10, network=[(12, 100, 8)]), pod(11, network=[(12, 100, 8)]), pod(12)], {10: 1, 11: 1, 12: 2})
+    assert v.throughput == pytest.approx(0.6)
 
 
-def test_labels_every_missing_label_counts():
-    e = evaluator([node(1, labels=["a"])], [], [pod(10, labels=["a", "b", "c"])])
-    assert e.evaluate({10: 1}).labels == 2000
+def test_throughput_scaled_down_along_path():
+    # a flow of 20 over 1->2 (capacity 10) and 2->3 (capacity 5): only 10 reaches 2->3,
+    # so both links are 100 % overloaded
+    v = violations([node(1), node(2), node(3)], [link(1, 2, throughput=10, latency=0), link(2, 3, throughput=5, latency=0)],
+                   [pod(10, network=[(11, 100, 20)]), pod(11)], {10: 1, 11: 3})
+    assert v.throughput == pytest.approx(2)
 
 
-def test_latency_and_throughput_on_a_path():
-    # 1 -> 2 -> 3, the pod on 1 wants 15 to the pod on 3
+def test_unconnected():
+    pods = [pod(10), pod(11, network=[(10, 10, 1)]), pod(12, network=[(13, 10, 1)]), pod(13)]
+    v = violations([node(1), node(2)], [], pods, {10: 2, 11: 1, 12: 1, 13: None})  # no link between 1 and 2
+    assert v.unconnected == 2
+    assert v.latency == 0
+
+
+def test_label_violation():
+    pods = [pod(10, labels=["zone-a", "hdd"]), pod(11, labels=["zone-b"]), pod(12, labels=["zone-a"])]
+    v = violations([node(1, labels=["zone-a", "ssd"])], [], pods, {10: 1, 11: 1, 12: 1})
+    assert v.label == pytest.approx(0.5 + 1)
+
+
+@pytest.mark.parametrize("counts, expected", [
+    ([2, 2, 2], 0),           # balanced
+    ([2, 2, 1, 1], 0),        # as balanced as possible
+    ([3, 1, 1, 1], 1),        # one pod too many
+    ([2, 2, 2, 0], 1),        # empty node
+    ([6, 0, 0], 4),           # all on one node
+])
+def test_spread_violation(counts, expected):
+    nodes = [node(i) for i in range(len(counts))]
+    placement = {}
+    for node_id, count in enumerate(counts):
+        for _ in range(count):
+            placement[100 + len(placement)] = node_id
+    assert violations(nodes, [], [pod(p) for p in placement], placement).spread == expected
+
+
+def test_moves_and_score():
+    e = evaluator([node(1), node(2)], [], [pod(10), pod(11)], previous={10: 1, 11: 1}, move_pod=3, spread=0)
+    evaluation = e.evaluate({10: 2, 11: 2})
+    assert evaluation.violations.move == 2
+    assert evaluation.total == 6
+
+
+def test_equal_weights_equal_impact():
+    weights = Penalties(**{name: 7 for name in ["cpu", "memory", "label", "unconnected_pod", "latency", "throughput",
+                                                 "move_pod", "spread", "stability"]})
+    for term in Violations().as_dict():
+        assert Violations(**{term: 1}).score(weights) == 7
+
+
+# --- behaviour taken over from problem.go --------------------------------------------------
+
+def test_fewest_hops_not_lowest_latency():
+    # 1->3 directly takes 50 ms, 1->2->3 only 2 ms: the reference routes over the fewest hops
     nodes = [node(1), node(2), node(3)]
-    links = [link(1, 2, throughput=10, latency=5), link(2, 3, throughput=4, latency=2)]
-    e = evaluator(nodes, links, [pod(10, network=[(11, 0, 15)]), pod(11)])
-    evaluation = e.evaluate({10: 1, 11: 3})
-    # latency: 7ms * 100; first link carries 15 of 10 (5 over), it forwards 10 to the second
-    # link which can serve 4 (6 over): (5 + 6) * 10
-    assert evaluation.network == 700 + 110
-    assert e.network_penalty({10: 1, 11: 3})[1] == {(1, 2): 15, (2, 3): 10}
+    links = [link(1, 3, latency=50), link(1, 2, latency=1), link(2, 3, latency=1)]
+    v = violations(nodes, links, [pod(10, network=[(11, 10, 0)]), pod(11)], {10: 1, 11: 3})
+    assert v.latency == pytest.approx((50 - 10) / 10)
 
 
-def test_connections_share_link_capacity():
-    links = [link(1, 2, throughput=10, latency=1)]
-    pods = [pod(10, network=[(12, 0, 6)]), pod(11, network=[(12, 0, 6)]), pod(12)]
-    e = evaluator(TWO_NODES, links, pods)
-    assert e.evaluate({10: 1, 11: 1, 12: 2}).network == 2 * 100 + (12 - 10) * 10
+def test_ties_are_broken_by_node_order():
+    # 1->2->4 and 1->3->4 have the same number of hops, the path over node 2 is taken
+    nodes = [node(1), node(2), node(3), node(4)]
+    links = [link(1, 3, latency=1), link(3, 4, latency=1), link(1, 2, latency=5), link(2, 4, latency=5)]
+    v = violations(nodes, links, [pod(10, network=[(11, 0, 0)]), pod(11)], {10: 1, 11: 4})
+    assert v.latency == pytest.approx(10)  # 10 ms where 0 are allowed (measured per ms)
 
 
-def test_no_route_and_unscheduled_partner_are_ignored():
-    e = evaluator(TWO_NODES, [], [pod(10, network=[(11, 0, 5)]), pod(11)])
-    assert e.evaluate({10: 1, 11: 2}).network == 0      # no link between 1 and 2
-    assert e.evaluate({10: 1, 11: None}).network == 500  # only the unscheduled pod itself
+def test_both_pods_unassigned_count_as_same_node():
+    # as in the reference: a requirement between two unassigned pods is not penalised
+    v = violations([node(1)], [], [pod(10, network=[(11, 0, 5)]), pod(11)], {10: None, 11: None})
+    assert v.unconnected == 0
 
 
-def test_spread_most_even_distribution_is_free():
-    pods = [pod(10), pod(11), pod(12)]
-    e = evaluator(TWO_NODES, [], pods)
-    assert e.evaluate({10: 1, 11: 1, 12: 2}).spread == 0
-    assert e.evaluate({10: 1, 11: 1, 12: 1}).spread == pytest.approx(20)  # one pod too many on 1, too few on 2
-    e = evaluator(TWO_NODES, [], pods[:2])
-    assert e.evaluate({10: 1, 11: 2}).spread == 0
-    assert e.evaluate({10: 1, 11: 1}).spread == pytest.approx(20)
+def test_unscheduled_pods_without_requirements_are_free():
+    v = violations([node(1)], [], [pod(10)], {10: None})
+    assert v == Violations()
 
 
-def test_spread_ignores_unscheduled_pods():
-    e = evaluator(TWO_NODES, [], [pod(10), pod(11), pod(12)])
-    assert e.evaluate({10: 1, 11: 2, 12: None}).spread == 0
+# --- simulator specific --------------------------------------------------------------------
+
+def test_stability_depends_on_the_placement():
+    e = evaluator([node(1), node(2)], [], [pod(10), pod(11)], crash_rates={1: 0.5, 2: 0.0}, spread=0)
+    assert e.evaluate({10: 1, 11: 1}).violations.stability == pytest.approx(1.0)
+    assert e.evaluate({10: 1, 11: 1}).total == pytest.approx(10 * 1.0)
+    assert e.evaluate({10: 2, 11: 2}).violations.stability == 0
 
 
-def test_stability_penalty_depends_on_the_placement():
-    e = evaluator(TWO_NODES, [], [pod(10), pod(11)], crash_rates={1: 0.5, 2: 0.0})
-    assert e.evaluate({10: 1, 11: 1}).stability == 2 * 20 * 0.5
-    assert e.evaluate({10: 2, 11: 2}).stability == 0
-
-
-def test_move_penalty():
-    e = evaluator(TWO_NODES, [], [pod(10), pod(11)], previous={10: 1, 11: None})
-    assert e.evaluate({10: 1, 11: 2}).move == 0      # 11 is new
-    assert e.evaluate({10: 2, 11: 2}).move == 400    # 10 moved
-    assert e.evaluate({10: None, 11: 2}).move == 400  # 10 stopped
-
-
-def test_total_is_sum_of_components_and_cached():
-    e = evaluator(TWO_NODES, [link(1, 2, latency=3)], [pod(10, network=[(11, 0, 1)]), pod(11)],
-                  previous={10: 2, 11: 2})
-    evaluation = e.evaluate({10: 1, 11: 2})
-    assert evaluation.total == round(sum(evaluation.components().values()), 2)
-    e.evaluate({10: 1, 11: 2})
+def test_evaluations_are_cached():
+    e = evaluator([node(1), node(2)], [link(1, 2)], [pod(10, network=[(11, 0, 1)]), pod(11)])
+    assert e.evaluate({10: 1, 11: 2}) == e.evaluate({11: 2, 10: 1})
     assert e.calls == 2 and e.unique_evaluations == 1
+
+
+def test_link_loads():
+    nodes = [node(1), node(2), node(3)]
+    links = [link(1, 2, throughput=10, latency=0), link(2, 3, throughput=4, latency=0)]
+    loads = evaluator(nodes, links, [pod(10, network=[(11, 0, 15)]), pod(11)]).link_loads({10: 1, 11: 3})
+    assert loads == {(1, 2): 15, (2, 3): 10}

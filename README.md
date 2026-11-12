@@ -34,7 +34,7 @@ algorithms:
 seeds: [1, 2, 3]
 steps: 1440
 repair_interval: 5
-penalties: {latency: 100, move_pod: 400}       # overrides, see simulator/config.py
+penalties: {latency: 20, move_pod: 5}          # weight overrides, see simulator/config.py
 metrics: {backend: sqlite, path: results/compare_algorithms.sqlite}
 workers: 8                                     # default: number of CPUs
 ```
@@ -51,8 +51,9 @@ database `simulator`), `memory`, `none`. Every backend stores
 -- e.g. as Grafana query (MySQL data source)
 SELECT time, value FROM metrics WHERE run_id = '...' AND metric = 'evaluation' ORDER BY step;
 ```
-Metrics per step: `evaluation` and its components (`resources_penalty`, `network_penalty`, `labels_penalty`,
-`stability_penalty`, `spread_penalty`, `move_penalty`), `nodes_online`, `links_online`, `pods_online`,
+Metrics per step: `evaluation` (the weighted score) and the unweighted terms `cpu_violation`, `memory_violation`,
+`latency_violation`, `throughput_violation`, `unconnected_violation`, `label_violation`, `spread_violation`,
+`move_violation`, `stability_violation`, plus `nodes_online`, `links_online`, `pods_online`,
 `pod_binding_changed` (pods whose node changed); when pods were scheduled: `num_eval_func_calls`,
 `unique_evaluations`, `schedule_time_ms`.
 
@@ -62,9 +63,30 @@ Every step:
 2. every `repair_interval` steps the network is repaired (failed nodes and links come back).
 3. the chaos monkey fails every node, link and running pod with probability `1 - stability`.
 
-The **evaluation** (lower is better, see `simulator/evaluator.py`) sums penalties for overloaded nodes,
-unscheduled pods, latency and missing throughput of the wanted connections, unmet label selectors,
-pods on nodes that crashed recently, an uneven spread of pods and pods that were moved.
+The **evaluation** (lower is better, `simulator/evaluator.py`) is a port of the evaluator of the reference
+scheduler (`network_aware_k8s_scheduler/k8_scheduler/scheduler/evaluator/problem.go`), so the simulator
+optimises the same objective. Every term is measured in "violations" (1 = one clear violation) and
+weighted with `Penalties` (defaults = the reference `config.yaml`):
+
+| Weight | Term (1 unit =) |
+|---|---|
+| `cpu`, `memory` | per node: `(load - capacity) / capacity`, 1 = one node at 200 % |
+| `latency` | per requirement over its limit: `(path latency - allowed) / max(allowed, 1)` |
+| `throughput` | per link: `max(0, demand - capacity) / capacity`; a flow that does not fit is reduced to the remaining capacity on the following links |
+| `unconnected_pod` | requirements whose pods are not both placed or have no path |
+| `label` | per pod: fraction of its label selector the node does not have |
+| `spread` | minimum number of pods to move so every node runs floor(P/N)..ceil(P/N) pods |
+| `move_pod` | pods moved away from their node |
+| `stability` | per pod: crashes of its node in the last `floating_average_window` steps / window |
+
+Paths are the fewest-hop paths over the online links (ties broken by node id), flows claim link capacity
+in pod id order. `tests/test_reference_parity.py` compiles the reference evaluator
+(`tools/reference_eval`, needs Go and the reference checkout) and checks that both compute the same
+values on random scenarios. Deviation: the reference's stability term is placement independent and
+currently always 0; here it counts the pods on recently crashed nodes.
+
+Like the reference algorithm, the search algorithms place every pod on an online node (a step moves one
+pod to another node, pods are never unassigned).
 
 ## Layout
 | Path | Purpose |

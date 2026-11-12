@@ -2,8 +2,9 @@
 The scheduling problem and helpers shared by the algorithms.
 
 A solution is a Placement (dict pod -> node or None). The neighbourhood of a placement
-consists of all placements where exactly one pod is moved to a node or unassigned:
-#pods * (#nodes + 1) neighbours.
+consists of all placements where exactly one pod is (re)assigned to an online node:
+#pods * #nodes neighbours (including the placement itself, when a pod is "moved" to its
+own node). Like the mutation of the reference scheduler, pods are never unassigned.
 """
 from dataclasses import dataclass, field
 from random import Random
@@ -39,21 +40,19 @@ class SchedulingProblem:
 
 
 def number_of_neighbours(problem: SchedulingProblem) -> int:
-    return len(problem.pod_ids) * (len(problem.node_ids) + 1)
+    return len(problem.pod_ids) * len(problem.node_ids)
 
 
 def neighbour_at_index(problem: SchedulingProblem, placement: Placement, index: int) -> Placement:
     """
-    The neighbour with the given index, without generating all neighbours.
-    For each pod there are (#nodes + 1) neighbours; the first one unassigns the pod.
+    The neighbour with the given index, without generating all neighbours:
+    pod number index // #nodes is assigned to node number index % #nodes.
     """
     if not 0 <= index < number_of_neighbours(problem):
         raise IndexError(f"neighbour index {index} out of range")
-    slots = len(problem.node_ids) + 1
-    pod_id = problem.pod_ids[index // slots]
-    node_index = index % slots - 1
+    num_nodes = len(problem.node_ids)
     neighbour = dict(placement)
-    neighbour[pod_id] = None if node_index == -1 else problem.node_ids[node_index]
+    neighbour[problem.pod_ids[index // num_nodes]] = problem.node_ids[index % num_nodes]
     return neighbour
 
 
@@ -65,7 +64,7 @@ def neighbours(problem: SchedulingProblem, placement: Placement) -> list[Placeme
     """All neighbours, in index order."""
     result = []
     for pod_id in problem.pod_ids:
-        for node_id in [None] + problem.node_ids:
+        for node_id in problem.node_ids:
             neighbour = dict(placement)
             neighbour[pod_id] = node_id
             result.append(neighbour)

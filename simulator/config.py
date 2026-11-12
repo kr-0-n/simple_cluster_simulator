@@ -16,14 +16,21 @@ import yaml
 
 @dataclass(frozen=True)
 class Penalties:
-    move_pod: float = 400           # per pod that is moved away from its node
-    unconnected_pod: float = 500    # per pod that is not running
-    label: float = 1000             # per label of a pod's labelSelector the node does not have
-    latency: float = 100            # per ms of latency on the path of a wanted connection
-    throughput: float = 10          # per unit of wanted throughput a link cannot serve
-    spread: float = 10              # per pod more or less on a node than in the most even distribution
-    stability: float = 20           # per pod, times the crash rate of its node
-    stability_window: int = 20      # crash rate = crashes in the last `stability_window` steps / window
+    """
+    Weights of the evaluation terms (see simulator.evaluator.Violations), the cost of one
+    violation each. Defaults and names follow the reference scheduler's config.yaml
+    (network_aware_k8s_scheduler/k8_scheduler/common/config.yaml).
+    """
+    cpu: float = 1_000_000          # one node at 200 % of its CPU (hard constraint)
+    memory: float = 1_000_000       # one node at 200 % of its memory (hard constraint)
+    label: float = 1_000_000        # one pod on a node matching none of its label selector (hard constraint)
+    unconnected_pod: float = 1000   # one network requirement whose pods are not placed or have no path
+    latency: float = 10             # one requirement at 2x its allowed latency
+    throughput: float = 10          # one link at 200 % of its capacity
+    move_pod: float = 5             # one pod moved to another node
+    spread: float = 2               # one pod that would have to move to balance the nodes
+    stability: float = 10           # one pod on a node that crashes once per step (averaged over the window)
+    floating_average_window: int = 30  # steps (= minutes) over which crashes are averaged
 
 
 @dataclass(frozen=True)

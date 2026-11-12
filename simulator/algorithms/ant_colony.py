@@ -88,7 +88,7 @@ def ant_colony_solve(problem: SchedulingProblem, ants: int = 2, moves_per_ant: i
                     if values[key] == 0:
                         log.debug("perfect placement found")
                         return finish(key)
-                    if not graph.has_edge(node, key):
+                    if key != node and not graph.has_edge(node, key):
                         graph.add_edge(node, key, pheromone=initial_pheromone)
             for ant in range(ants):
                 move(ant)

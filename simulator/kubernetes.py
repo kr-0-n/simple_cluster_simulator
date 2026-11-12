@@ -28,7 +28,7 @@ class Kubernetes:
     def evaluator(self) -> Evaluator:
         cluster = self.cluster
         return Evaluator(cluster.network, cluster.pods, self.penalties,
-                         crash_rates=cluster.crash_rates(self.penalties.stability_window),
+                         crash_rates=cluster.crash_rates(self.penalties.floating_average_window),
                          previous=dict(cluster.placement))
 
     def tick(self):
@@ -53,8 +53,8 @@ class Kubernetes:
 
         evaluation = evaluator.evaluate(placement)
         metrics.record("evaluation", evaluation.total)
-        for name, value in evaluation.components().items():
-            metrics.record(f"{name}_penalty", value)
+        for name, value in evaluation.violations.as_dict().items():
+            metrics.record(f"{name}_violation", value)
         metrics.record("pod_binding_changed", sum(1 for pod_id in cluster.pods
                                                   if cluster.placement.get(pod_id) != placement.get(pod_id)))
         log.debug("step %d: evaluation %s", cluster.clock.step, evaluation)

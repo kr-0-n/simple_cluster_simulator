@@ -36,7 +36,9 @@ class FailureLog:
 
     def crash_rate(self, node_id: NodeId, step: int, window: int) -> float:
         """Crashes of the node during the last `window` steps, divided by the window."""
-        crashes = sum(1 for crash in self.nodes.get(node_id, ()) if step - crash <= window)
+        if window <= 0:
+            return 0.0
+        crashes = sum(1 for crash in self.nodes.get(node_id, ()) if step - crash < window)
         return crashes / window
 
 
