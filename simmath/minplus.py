@@ -1,14 +1,9 @@
 from simmath.LinearFunction import LinearFunction
 
-def min(f: LinearFunction , g: LinearFunction) -> LinearFunction:
-    h = LinearFunction(0, 0, 0)
-    if f.m < g.m:
-        h.m = f.m
-    else:
-        h.m = g.m
-    if f.c < g.c:
-        h.c = f.c
-    else:
-        h.c = g.c
-    h.a = f.a + g.a
-    return h
+
+def convolve(f: LinearFunction, g: LinearFunction) -> LinearFunction:
+    """
+    Min-plus convolution of two rate-latency service curves (concatenation of two servers):
+    the rate is the minimum of both rates, the latencies add up.
+    """
+    return LinearFunction(min(f.m, g.m), min(f.c, g.c), f.a + g.a)

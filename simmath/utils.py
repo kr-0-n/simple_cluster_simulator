@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
+
 from simmath.LinearFunction import LinearFunction
+
 
 def plot(*functions : LinearFunction):
     for f in functions:
