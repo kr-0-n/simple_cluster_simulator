@@ -12,13 +12,17 @@ from random import Random
 from simulator.evaluator import Evaluator
 from simulator.model import NodeId, Placement, Pod, PodId
 
+GOOD_ENOUGH = 0.1  # a placement scoring below this is accepted immediately (as in the reference)
+DEFAULT_BUDGET = 2000
+
 
 @dataclass
 class SchedulingProblem:
     evaluator: Evaluator            # evaluates placements (cached)
     rng: Random                     # the only source of randomness for the algorithm
     current: Placement              # placement before this decision (new pods: None)
-    new_pod_ids: list[PodId]        # the pods that have to be scheduled
+    new_pod_ids: list[PodId]        # the pods that have to be scheduled (empty: re-optimise the placement)
+    budget: int = DEFAULT_BUDGET    # evaluations the search algorithms may use for this decision
     pods: dict[PodId, Pod] = field(init=False)
     pod_ids: list[PodId] = field(init=False)
     node_ids: list[NodeId] = field(init=False)
@@ -30,6 +34,33 @@ class SchedulingProblem:
 
     def score(self, placement: Placement) -> float:
         return self.evaluator.score(placement)
+
+    @property
+    def evaluations(self) -> int:
+        return self.evaluator.calls
+
+    def exhausted(self) -> bool:
+        """True when the evaluation budget is used up."""
+        return self.evaluator.calls >= self.budget
+
+    def greedy_initial_placement(self) -> Placement:
+        """
+        The current placement with every new pod on its best node: pods with a label selector
+        first (like the reference), each on the node that gives the lowest score given the pods
+        placed before it (ties: first node). Costs #new pods * #nodes evaluations; it always
+        completes, even if that exceeds the budget.
+        """
+        placement = dict(self.current)
+        order = sorted(self.new_pod_ids, key=lambda pod_id: (not self.pods[pod_id].label_selector, pod_id))
+        for pod_id in order:
+            best_node, best_value = None, None
+            for node_id in self.node_ids:
+                placement[pod_id] = node_id
+                value = self.score(placement)
+                if best_value is None or value < best_value:
+                    best_node, best_value = node_id, value
+            placement[pod_id] = best_node
+        return placement
 
     def random_initial_placement(self) -> Placement:
         """The current placement with every new pod assigned to a random node."""

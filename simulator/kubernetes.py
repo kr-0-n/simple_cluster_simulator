@@ -1,6 +1,8 @@
 """
 The control loop of the simulated cluster: every tick the pods that are not running are
-scheduled with the selected algorithm, and the resulting placement is evaluated.
+scheduled with the selected algorithm, and the resulting placement is evaluated. Every
+`reoptimize_interval` ticks the algorithm also runs when no pod is pending, to improve the
+placement of the running pods (like the Optimize round of the reference scheduler).
 """
 import logging
 import time
@@ -17,13 +19,15 @@ log = logging.getLogger(__name__)
 
 class Kubernetes:
     def __init__(self, cluster: Cluster, algorithm: AlgorithmConfig, penalties: Penalties, rng: Random,
-                 metrics: MetricsSink):
+                 metrics: MetricsSink, evaluation_budget: int = 2000, reoptimize_interval: int = 0):
         self.cluster = cluster
         self.algorithm = get_algorithm(algorithm.name)
         self.algorithm_params = algorithm.params
         self.penalties = penalties
         self.rng = rng
         self.metrics = metrics
+        self.evaluation_budget = evaluation_budget
+        self.reoptimize_interval = reoptimize_interval
 
     def evaluator(self) -> Evaluator:
         cluster = self.cluster
@@ -39,17 +43,22 @@ class Kubernetes:
 
         evaluator = self.evaluator()
         placement = cluster.placement
+        step = cluster.clock.step
         pending = cluster.pending_pod_ids()
-        if pending and cluster.network.number_of_nodes() > 0:
-            log.debug("step %d: scheduling pods %s", cluster.clock.step, pending)
-            problem = SchedulingProblem(evaluator, self.rng, dict(cluster.placement), pending)
+        reoptimize = (not pending and self.reoptimize_interval > 0 and step > 0
+                      and step % self.reoptimize_interval == 0 and cluster.running_pod_ids())
+        if cluster.network.number_of_nodes() == 0:
+            if pending:
+                log.debug("step %d: no nodes available for pods %s", step, pending)
+        elif pending or reoptimize:
+            log.debug("step %d: %s", step, f"scheduling pods {pending}" if pending else "re-optimising")
+            problem = SchedulingProblem(evaluator, self.rng, dict(cluster.placement), pending, self.evaluation_budget)
             start = time.perf_counter()
             placement = self.algorithm(problem, **self.algorithm_params)
             metrics.record("schedule_time_ms", (time.perf_counter() - start) * 1000)
             metrics.record("num_eval_func_calls", evaluator.calls)
             metrics.record("unique_evaluations", evaluator.unique_evaluations)
-        elif pending:
-            log.debug("step %d: no nodes available for pods %s", cluster.clock.step, pending)
+            metrics.record("reoptimization", 0 if pending else 1)
 
         evaluation = evaluator.evaluate(placement)
         metrics.record("evaluation", evaluation.total)

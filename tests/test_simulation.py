@@ -85,3 +85,18 @@ def test_cli(tmp_path, capsys):
     assert len(load_topology(str(topology_file)).nodes) == 3 + 4 + 6
     assert main(["draw", "--topology", "small", "--deployment", "small", "-o", str(tmp_path / "g.dot")]) == 0
     assert "node1" in (tmp_path / "g.dot").read_text()
+
+
+def test_reoptimisation_runs_on_the_interval():
+    config = dataclasses.replace(SMALL, steps=40, reoptimize_interval=5)
+    recorder = MemoryRecorder()
+    Simulation(config, recorder=recorder, run_id="run").run()
+    runs = dict(recorder.series("run", "reoptimization"))
+    reoptimised = [step for step, value in runs.items() if value == 1]
+    assert reoptimised and all(step % 5 == 0 and step > 0 for step in reoptimised)
+    pending = dict(recorder.series("run", "unscheduled_violation"))
+    assert all(pending[step] == 0 for step in reoptimised)  # only when nothing is pending
+
+    recorder = MemoryRecorder()
+    Simulation(dataclasses.replace(config, reoptimize_interval=0), recorder=recorder, run_id="run").run()
+    assert all(value == 0 for _, value in recorder.series("run", "reoptimization"))

@@ -25,6 +25,7 @@ class Penalties:
     memory: float = 1_000_000       # one node at 200 % of its memory (hard constraint)
     label: float = 1_000_000        # one pod on a node matching none of its label selector (hard constraint)
     unconnected_pod: float = 1000   # one network requirement whose pods are not placed or have no path
+    unscheduled_pod: float = 1_000_000  # one pod that is not running (simulator only, not in the reference)
     latency: float = 10             # one requirement at 2x its allowed latency
     throughput: float = 10          # one link at 200 % of its capacity
     move_pod: float = 5             # one pod moved to another node
@@ -71,6 +72,8 @@ class SimulationConfig:
     seed: int = 19                      # seeds the chaos monkey and the algorithm
     steps: int = 1440                   # one step == one simulated minute
     repair_interval: int = 5            # repair the network every n steps
+    reoptimize_interval: int = 10       # also run the algorithm every n steps when no pod is pending (0 = never)
+    evaluation_budget: int = 2000       # evaluations per scheduling decision for the search algorithms
     penalties: Penalties = Penalties()
     metrics: MetricsConfig = MetricsConfig()
     experiment: str = "default"
@@ -87,6 +90,8 @@ class ExperimentConfig:
     seeds: tuple[int, ...]
     steps: int = SimulationConfig.steps
     repair_interval: int = SimulationConfig.repair_interval
+    reoptimize_interval: int = SimulationConfig.reoptimize_interval
+    evaluation_budget: int = SimulationConfig.evaluation_budget
     penalties: Penalties = Penalties()
     metrics: MetricsConfig = MetricsConfig()
     workers: Optional[int] = None       # parallel processes, None = number of CPUs
@@ -95,6 +100,7 @@ class ExperimentConfig:
         return [
             SimulationConfig(topology=topology, deployment=deployment, algorithm=algorithm, seed=seed,
                              steps=self.steps, repair_interval=self.repair_interval,
+                             reoptimize_interval=self.reoptimize_interval, evaluation_budget=self.evaluation_budget,
                              penalties=self.penalties, metrics=self.metrics, experiment=self.name)
             for (topology, deployment), algorithm, seed
             in itertools.product(self.scenarios, self.algorithms, self.seeds)

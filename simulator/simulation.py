@@ -55,7 +55,9 @@ class Simulation:
         self.chaos_monkey = ChaosMonkey(Random(f"chaos-{config.seed}"))
         self.metrics = MetricsSink(self.recorder, self.run_id, self.clock)
         self.kubernetes = Kubernetes(self.cluster, config.algorithm, config.penalties,
-                                     Random(f"algorithm-{config.seed}"), self.metrics)
+                                     Random(f"algorithm-{config.seed}"), self.metrics,
+                                     evaluation_budget=config.evaluation_budget,
+                                     reoptimize_interval=config.reoptimize_interval)
 
     def step(self):
         self.kubernetes.tick()

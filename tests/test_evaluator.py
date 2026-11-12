@@ -83,7 +83,7 @@ def test_moves_and_score():
 
 def test_equal_weights_equal_impact():
     weights = Penalties(**{name: 7 for name in ["cpu", "memory", "label", "unconnected_pod", "latency", "throughput",
-                                                 "move_pod", "spread", "stability"]})
+                                                 "move_pod", "spread", "stability", "unscheduled_pod"]})
     for term in Violations().as_dict():
         assert Violations(**{term: 1}).score(weights) == 7
 
@@ -107,17 +107,23 @@ def test_ties_are_broken_by_node_order():
 
 
 def test_both_pods_unassigned_count_as_same_node():
-    # as in the reference: a requirement between two unassigned pods is not penalised
+    # as in the reference: a requirement between two unassigned pods is not penalised as unconnected
     v = violations([node(1)], [], [pod(10, network=[(11, 0, 5)]), pod(11)], {10: None, 11: None})
     assert v.unconnected == 0
-
-
-def test_unscheduled_pods_without_requirements_are_free():
-    v = violations([node(1)], [], [pod(10)], {10: None})
-    assert v == Violations()
+    assert v.unscheduled == 2  # but both pods are penalised as unscheduled
 
 
 # --- simulator specific --------------------------------------------------------------------
+
+def test_unscheduled_pods_are_penalised_like_a_hard_constraint():
+    e = evaluator([node(1, labels=["x"])], [], [pod(10), pod(11, labels=["y"])])
+    pending = e.evaluate({10: 1, 11: None})
+    wrong_node = e.evaluate({10: 1, 11: 1})
+    assert pending.violations == Violations(unscheduled=1)
+    assert pending.total == 1_000_000
+    assert wrong_node.violations.label == 1 and wrong_node.total == 1_000_000  # as expensive as pending
+    assert e.evaluate({10: None, 11: None}).total == 2_000_000
+
 
 def test_stability_depends_on_the_placement():
     e = evaluator([node(1), node(2)], [], [pod(10), pod(11)], crash_rates={1: 0.5, 2: 0.0}, spread=0)

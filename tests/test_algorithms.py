@@ -10,16 +10,17 @@ from simulator.config import Penalties
 from simulator.evaluator import Evaluator
 from simulator.scenarios import load_scenario
 
-FAST_PARAMS = {"evolutionary_solve": {"generations": 5}}
+FAST_PARAMS = {}
+SEARCH = ["simulated_annealing_solve", "evolutionary_solve", "ant_colony_solve"]
 
 
-def problem(scenario="small", seed=1, placed=()):
+def problem(scenario="small", seed=1, placed=(), budget=300):
     topology, deployment = load_scenario(scenario, scenario)
     cluster = Cluster(topology, deployment, Clock())
     placement = dict(cluster.placement)
     placement.update(placed)
     evaluator = Evaluator(cluster.network, cluster.pods, Penalties(), previous=placement)
-    return SchedulingProblem(evaluator, Random(seed), placement, [p for p, n in placement.items() if n is None])
+    return SchedulingProblem(evaluator, Random(seed), placement, [p for p, n in placement.items() if n is None], budget)
 
 
 @pytest.mark.parametrize("name", sorted(ALGORITHMS))
@@ -54,10 +55,49 @@ def test_kubernetes_default_does_not_move_running_pods():
     assert placement[5] == 1 and placement[6] == 2
 
 
-def test_algorithm_parameters_are_used():
+GREEDY_START_MEDIUM = 25 * 20  # all 25 pods are new, each is tried on all 20 nodes
+
+
+@pytest.mark.parametrize("name", SEARCH)
+def test_search_algorithms_use_the_budget(name):
+    p = problem("medium", budget=2000)
+    ALGORITHMS[name](p)
+    assert 2000 <= p.evaluations <= 2001
+
+
+@pytest.mark.parametrize("name", SEARCH)
+def test_greedy_start_completes_beyond_the_budget(name):
+    p = problem("medium", budget=100)
+    placement = ALGORITHMS[name](p)
+    assert all(node is not None for node in placement.values())
+    assert GREEDY_START_MEDIUM <= p.evaluations <= GREEDY_START_MEDIUM + 1
+
+
+def test_greedy_initial_placement_puts_pods_on_their_best_node():
     p = problem()
-    ALGORITHMS["simulated_annealing_solve"](p, max_iterations=5)
-    assert p.evaluator.calls == 6
+    placement = p.greedy_initial_placement()
+    assert placement[11] == 1  # pod 11 needs the SSD of node 1
+    assert all(node is not None for node in placement.values())
+    assert p.score(placement) < p.score(p.random_initial_placement())
+
+
+def test_reoptimisation_without_new_pods():
+    current = ALGORITHMS["random_solve"](problem())
+    p = problem(placed=current)
+    assert p.new_pod_ids == []
+    improved = ALGORITHMS["simulated_annealing_solve"](p)
+    assert p.score(improved) <= p.score(current)
+    assert ALGORITHMS["kubernetes_default"](problem(placed=current)) == current  # never moves pods
+
+
+def test_algorithm_parameters_are_used():
+    # with the same budget, different parameters explore different parts of the search space
+    explored = []
+    for params in [{"ants": 1, "moves_per_ant": 1}, {"ants": 4, "moves_per_ant": 5}]:
+        p = problem("medium", seed=2, budget=1500)
+        ALGORITHMS["ant_colony_solve"](p, **params)
+        explored.append(p.evaluator.unique_evaluations)
+    assert explored[0] != explored[1]
 
 
 def test_search_beats_random_placement():

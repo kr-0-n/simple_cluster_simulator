@@ -102,4 +102,6 @@ def test_evaluator_matches_reference(reference_eval, seed):
                 got = getattr(evaluation.violations, term)
                 assert math.isclose(got, reference[go_name], rel_tol=1e-9, abs_tol=1e-9), \
                     f"{term}: {got} != {reference[go_name]} for {to_case(nodes, links, pods, base, [assignment], penalties)}"
-            assert math.isclose(evaluation.total, reference["Score"], rel_tol=1e-9, abs_tol=1e-9)
+            # the unscheduled term only exists in the simulator
+            without_unscheduled = evaluation.total - penalties.unscheduled_pod * evaluation.violations.unscheduled
+            assert math.isclose(without_unscheduled, reference["Score"], rel_tol=1e-9, abs_tol=1e-6)

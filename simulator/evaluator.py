@@ -19,9 +19,12 @@ Conventions taken over from the reference (they matter for ties and shared links
     visiting neighbours in node order (breadth first search),
   - flows claim link capacity in pod order, requirements in the order they are listed.
 
-Deviation from the reference: the stability term depends on the placement (pods on
-nodes that crashed recently). In the reference it is the same for every placement
-and currently always 0 (README "Known limitations").
+Deviations from the reference:
+  - the stability term depends on the placement (pods on nodes that crashed recently). In
+    the reference it is the same for every placement and currently always 0.
+  - the additional term `unscheduled` counts pods that are not running. The reference only
+    penalises them through their network requirements, so leaving a pod pending was almost
+    free compared to violating a hard constraint.
 """
 from collections import deque
 from dataclasses import dataclass, fields
@@ -45,12 +48,14 @@ class Violations:
     spread: float = 0       # minimum number of pods that would have to move to balance the nodes
     move: float = 0         # pods moved away from their current node
     stability: float = 0    # sum over pods of the recent crash rate of their node (crashes per step)
+    unscheduled: float = 0  # pods that are not running (not in the reference)
 
     def score(self, penalties: Penalties) -> float:
         p = penalties
         return (p.cpu * self.cpu + p.memory * self.memory + p.latency * self.latency
                 + p.throughput * self.throughput + p.unconnected_pod * self.unconnected + p.label * self.label
-                + p.spread * self.spread + p.move_pod * self.move + p.stability * self.stability)
+                + p.spread * self.spread + p.move_pod * self.move + p.stability * self.stability
+                + p.unscheduled_pod * self.unscheduled)
 
     def as_dict(self) -> dict[str, float]:
         return {f.name: getattr(self, f.name) for f in fields(self)}
@@ -124,7 +129,8 @@ class Evaluator:
         latency, throughput, unconnected, _ = self._network_violations(placement)
         return Violations(cpu=cpu, memory=memory, latency=latency, throughput=throughput, unconnected=unconnected,
                           label=self._label_violations(placement), spread=self._spread_violation(placement),
-                          move=self._moves(placement), stability=self._stability_violation(placement))
+                          move=self._moves(placement), stability=self._stability_violation(placement),
+                          unscheduled=float(sum(1 for node_id in placement.values() if node_id is None)))
 
     def link_loads(self, placement: Placement) -> dict[tuple, float]:
         """The throughput routed over every link (for visualisation)."""

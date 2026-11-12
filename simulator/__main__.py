@@ -64,6 +64,7 @@ def cmd_run(args):
     config = SimulationConfig(topology=args.topology, deployment=args.deployment,
                               algorithm=AlgorithmConfig(args.algorithm, _params(args.param)), seed=args.seed,
                               steps=args.steps, repair_interval=args.repair_interval, metrics=metrics,
+                              reoptimize_interval=args.reoptimize_interval, evaluation_budget=args.budget,
                               experiment=args.experiment)
     result = Simulation(config).run()
     print(f"run {result.run_id} {result.status} in {result.duration_s:.1f}s")
@@ -75,8 +76,10 @@ def cmd_run(args):
 
 def cmd_experiment(args):
     experiment = load_experiment(args.file)
-    if args.steps is not None:
-        experiment = dataclasses.replace(experiment, steps=args.steps)
+    for setting in ("steps", "budget", "reoptimize_interval"):
+        if getattr(args, setting) is not None:
+            field = "evaluation_budget" if setting == "budget" else setting
+            experiment = dataclasses.replace(experiment, **{field: getattr(args, setting)})
     if args.metrics is not None:
         experiment = dataclasses.replace(experiment, metrics=dataclasses.replace(experiment.metrics, backend=args.metrics))
     results = run_experiment(experiment, workers=args.workers, log_level=args.log_level)
@@ -157,6 +160,10 @@ def main(argv=None) -> int:
     _add_scenario_arguments(run)
     run.add_argument("--steps", type=int, default=DEFAULT.steps)
     run.add_argument("--repair-interval", type=int, default=DEFAULT.repair_interval)
+    run.add_argument("--reoptimize-interval", type=int, default=DEFAULT.reoptimize_interval,
+                     help="run the algorithm every n steps also without pending pods (0 = never)")
+    run.add_argument("--budget", type=int, default=DEFAULT.evaluation_budget,
+                     help="evaluations per scheduling decision for the search algorithms")
     run.add_argument("--metrics", default=DEFAULT.metrics.backend, choices=["sqlite", "mysql", "memory", "none"])
     run.add_argument("--metrics-path", default=DEFAULT.metrics.path)
     run.add_argument("--experiment", default=DEFAULT.experiment, help="experiment name stored with the run")
@@ -166,6 +173,8 @@ def main(argv=None) -> int:
     experiment.add_argument("file")
     experiment.add_argument("--workers", type=int, help="parallel processes (default: experiment setting or #CPUs)")
     experiment.add_argument("--steps", type=int, help="override the number of steps")
+    experiment.add_argument("--budget", type=int, help="override the evaluation budget")
+    experiment.add_argument("--reoptimize-interval", type=int, help="override the re-optimisation interval")
     experiment.add_argument("--metrics", choices=["sqlite", "mysql", "memory", "none"], help="override the backend")
     experiment.set_defaults(func=cmd_experiment)
 
